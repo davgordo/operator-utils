@@ -10,8 +10,8 @@ on:
 jobs:
   shared-operator-workflow:
     name: shared-operator-workflow
-    uses: davgordo/github-workflows-operators/.github/workflows/pr-operator.yml@skip-package
+    uses: davgordo/github-workflows-operators/.github/workflows/pr-library.yml@go-library
     with:
+      OPERATOR_SDK_VERSION: "v1.22.2"
+      GO_VERSION: "~1.18"
       RUN_UNIT_TESTS: true
-      RUN_INTEGRATION_TESTS: false
-      PACKAGE_OPERATOR: false
