@@ -2,16 +2,71 @@ name: push
 on:
   push:
     branches:
-      - main
       - master
+      - main
     tags:
       - v*
 
 jobs:
-  go-module-workflow:
-    name: go-module-workflow
-    uses: ./.github/workflows/go-module-release.yml
-    with:
-      OPERATOR_SDK_VERSION: "v1.22.2"
-      GO_VERSION: "~1.18"
-      RUN_UNIT_TESTS: true
+  build:
+    runs-on: ubuntu-latest
+    name: build
+    steps:
+      - name: set repo name
+        shell: bash
+        run: |
+          echo "REPOSITORY_NAME=$(basename $GITHUB_REPOSITORY)" >> $GITHUB_ENV  
+
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.18
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: build code
+        shell: bash
+        run:  make
+
+  release-github:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags')"
+    needs: ["build"]
+    steps:
+      - name: set repo name
+        shell: bash
+        run: |
+          echo "REPOSITORY_NAME=$(basename $GITHUB_REPOSITORY)" >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - run: |
+          git fetch --prune --unshallow
+
+      - name: Get the version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
+
+      - name: Generate Changelog
+        run: |
+          LATEST_TAG=$(git tag --sort=creatordate | sed '$!d')
+          PREVIOUS_TAG=$(git tag --sort=creatordate | sed 'x;$!d')
+          if [ -z "${PREVIOUS_TAG}" ]; then
+            REV_RANGE=${LATEST_TAG}
+          else
+            REV_RANGE=${PREVIOUS_TAG}..${LATEST_TAG}
+          fi
+          git log --pretty=format:"- %s %H (%aN)" --no-merges ${REV_RANGE} > ${VERSION}-CHANGELOG.txt
+          cat ${VERSION}-CHANGELOG.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: ${{ env.VERSION }}-CHANGELOG.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
